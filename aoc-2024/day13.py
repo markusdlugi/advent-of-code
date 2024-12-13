@@ -10,10 +10,7 @@ def solve(machine: Machine):
     a, b = Symbol('a'), Symbol('b')
     system = Matrix(((machine.ax, machine.bx, machine.px), (machine.ay, machine.by, machine.py)))
     result = solve_linear_system(system, a, b)
-    if any(not value.is_integer for value in result.values()):
-        return 0, 0
-    else:
-        return result[a], result[b]
+    return (result[a], result[b]) if all(value.is_integer for value in result.values()) else (0, 0)
 
 
 if __name__ == '__main__':
