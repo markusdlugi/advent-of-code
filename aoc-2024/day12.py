@@ -1,143 +1,70 @@
-from collections import defaultdict
+from collections import deque, namedtuple
 
-lines = [line.strip() for line in open("input/12.txt")]
+Region = namedtuple('Region', ['plots', 'neighbors', 'corners'])
 
+# N, E, S, W
 dr, dc = [-1, 0, 1, 0], [0, 1, 0, -1]
-regions = defaultdict(list)
-counter = defaultdict(int)
-for r, line in enumerate(lines):
-    for c, word in enumerate(line):
-        current_key = word + str(counter[word])
-        connected = False
+
+# NE, SE, SW, NW
+corner_dr, corner_dc = [-1, 1, 1, -1], [1, 1, -1, -1]
+
+
+def count_corners(region: set):
+    corners = 0
+    for r, c in region:
+        for d in range(4):
+            corner = r + corner_dr[d], c + corner_dc[d]
+            adjacent_in_region = [(r + dr[dd], c + dc[dd]) in region for dd in [d, (d + 1) % 4]]
+            if not any(adjacent_in_region) or (all(adjacent_in_region) and not corner in region):
+                corners += 1
+
+    return corners
+
+
+def discover_region(grid: list, start: tuple, plant):
+    q = deque([start])
+    visited = {start}
+    neighbors = 0
+    while q:
+        r, c = q.popleft()
         for d in range(4):
             rr, cc = r + dr[d], c + dc[d]
-            if 0 <= rr < len(lines) and 0 <= cc < len(lines[r]) and lines[rr][cc] == word:
-                for name, region in regions.items():
-                    if (rr, cc) in region:
-                        connected = True
-                        current_key = name
-                        break
-        if not connected:
-            counter[word] += 1
-            current_key = word + str(counter[word])
+            if (rr, cc) in visited:
+                continue
+            if 0 <= rr < len(grid) and 0 <= cc < len(grid[r]) and grid[rr][cc] == plant:
+                visited.add((rr, cc))
+                q.append((rr, cc))
+            else:
+                neighbors += 1
 
-        regions[current_key].append((r, c))
+    corners = count_corners(visited)
 
-to_join = []
-for name, region in regions.items():
-    for name2, region2 in regions.items():
-        if name != name2 and name[0] == name2[0]:
-            join = False
-            for r, c in region:
-                for d in range(4):
-                    rr, cc = r + dr[d], c + dc[d]
-                    if 0 <= rr < len(lines) and 0 <= cc < len(lines[r]) and (rr, cc) in region2:
-                        join = True
-                        break
-                if join:
-                    break
-            if join:
-                to_join.append((name, name2))
+    return Region(visited, neighbors, corners)
 
-for a, b in to_join:
-    regions[a].extend(regions[b])
-    del regions[b]
 
-to_join = []
-for name, region in regions.items():
-    for name2, region2 in regions.items():
-        if name != name2 and name[0] == name2[0]:
-            join = False
-            for r, c in region:
-                for d in range(4):
-                    rr, cc = r + dr[d], c + dc[d]
-                    if 0 <= rr < len(lines) and 0 <= cc < len(lines[r]) and (rr, cc) in region2:
-                        join = True
-                        break
-                if join:
-                    break
-            if join:
-                to_join.append((name, name2))
+def discover_all_regions(grid: list):
+    regions = []
+    visited = set()
+    for r, line in enumerate(grid):
+        for c, plant in enumerate(grid[r]):
+            if (r, c) in visited:
+                continue
+            region = discover_region(grid, (r, c), plant)
+            regions.append(region)
+            visited.update(region.plots)
+    return regions
 
-for a, b in to_join:
-    regions[a].extend(regions[b])
-    del regions[b]
 
-to_join = []
-for name, region in regions.items():
-    for name2, region2 in regions.items():
-        if name != name2 and name[0] == name2[0]:
-            join = False
-            for r, c in region:
-                for d in range(4):
-                    rr, cc = r + dr[d], c + dc[d]
-                    if 0 <= rr < len(lines) and 0 <= cc < len(lines[r]) and (rr, cc) in region2:
-                        join = True
-                        break
-                if join:
-                    break
-            if join:
-                to_join.append((name, name2))
+def calculate_price(regions):
+    total_price1 = sum(len(region.plots) * region.neighbors for region in regions)
+    print(total_price1)
 
-for a, b in to_join:
-    regions[a].extend(regions[b])
-    del regions[b]
+    total_price2 = sum(len(region.plots) * region.corners for region in regions)
+    print(total_price2)
 
-dr, dc = [-1, 0, 1, 0], [0, 1, 0, -1]
-total_price = 0
-for name, region in regions.items():
-    area = len(region)
-    fence = 0
-    side_map = defaultdict(list)
-    start = None
-    for (r, c) in region:
-        for d in range(4):
-            rr, cc = r + dr[d], c + dc[d]
-            if not (0 <= rr < len(lines) and 0 <= cc < len(lines[r])):
-                fence += 1
-                side_map[d].append((r, c))
-                if start is None:
-                    start = (r, c, d)
-            elif (rr, cc) not in region:
-                fence += 1
-                side_map[d].append((r, c))
-                if start is None:
-                    start = (r, c, d)
 
-    for d, sides in side_map.items():
-        for r, c in sides:
-            to_remove = []
-            for rr, cc in sides:
-                if r == rr and c == cc:
-                    continue
-                if r != rr and c != cc:
-                    continue
-                adjacent = False
-                if c == cc:
-                    for rrr in range(min(r, rr), max(r, rr)):
-                        neighbor = rrr + dr[d], c + dc[d]
-                        if (rrr, c) not in region or neighbor in region:
-                            break
-                    else:
-                        adjacent = True
-                else:
-                    for ccc in range(min(c, cc), max(c, cc)):
-                        neighbor = r + dr[d], ccc + dc[d]
-                        if (r, ccc) not in region or neighbor in region:
-                            break
-                    else:
-                        adjacent = True
-                if adjacent:
-                    to_remove.append((rr, cc))
-            for side in to_remove:
-                sides.remove(side)
+if __name__ == '__main__':
+    grid = [line.strip() for line in open("input/12.txt")]
 
-    sum_sides = 0
-    for side in side_map.values():
-        sum_sides += len(side)
-
-    price = area * sum_sides
-    print(f"{name}: {area} * {sum_sides} = {price}")
-    total_price += price
-
-print(total_price)
+    regions = discover_all_regions(grid)
+    calculate_price(regions)
