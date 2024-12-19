@@ -2,11 +2,11 @@ from functools import lru_cache
 
 
 @lru_cache(100000)
-def arrangement_count(design: str):
+def count_arrangements(design: str):
     if len(design) == 0:
         return 1
 
-    return sum(arrangement_count(design[len(pattern):]) if design.startswith(pattern) else 0 for pattern in patterns)
+    return sum(count_arrangements(design[len(p):]) for p in patterns if design.startswith(p))
 
 
 if __name__ == '__main__':
@@ -14,10 +14,10 @@ if __name__ == '__main__':
     patterns = lines[0].split(", ")
     designs = lines[2:]
 
-    arrangements = [arrangement_count(design) for design in designs]
+    arrangements = [count_arrangements(design) for design in designs]
 
-    possible = sum(1 if arrangement > 0 else 0 for arrangement in arrangements)
+    possible = sum(1 for a in arrangements if a > 0)
     print(possible)
-    
+
     total_count = sum(arrangements)
     print(total_count)
