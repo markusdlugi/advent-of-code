@@ -68,6 +68,4 @@ for current in range(counter, -1, -1):
                 free_space[index] = (free_id + size, free_size - size)
             break
 
-print(new_disk)
-
 print(compute_checksum(new_disk))
