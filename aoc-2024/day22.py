@@ -1,46 +1,44 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 
-numbers = list(map(int, open("input/22.txt")))
 
-secret_sum = 0
-prices = defaultdict(list)
-price_changes = defaultdict(list)
-for i, num in enumerate(numbers):
-    price = num % 10
-    prices[i].append(price)
+def evolve_secret(secret: int):
+    secret ^= (secret * 64)
+    secret %= 16777216
 
-    for t in range(2000):
-        prev = num
-        prev_price = num % 10
+    secret ^= (secret // 32)
+    secret %= 16777216
 
-        num ^= (num * 64)
-        num %= 16777216
+    secret ^= (secret * 2048)
+    secret %= 16777216
 
-        num ^= (num // 32)
-        num %= 16777216
+    return secret
 
-        num ^= (num * 2048)
-        num %= 16777216
 
-        price = num % 10
-        prices[i].append(price)
+if __name__ == '__main__':
+    secrets = list(map(int, open("input/22.txt")))
 
-        price_change = price - prev_price
-        price_changes[i].append(price_change)
+    secret_sum = 0
+    seq_sum = defaultdict(int)
+    for i, secret in enumerate(secrets):
+        seen = set()
+        seq_window = deque([])
+        for t in range(2000):
+            prev_price = secret % 10
 
-    secret_sum += num
+            secret = evolve_secret(secret)
 
-print(secret_sum)
+            price = secret % 10
+            price_change = price - prev_price
 
-buyer_count = len(numbers)
+            seq_window.append(price_change)
+            if len(seq_window) > 4:
+                seq_window.popleft()
+                seq = tuple(seq_window)
+                if not seq in seen:
+                    seq_sum[seq] += price
+                    seen.add(seq)
 
-seq_sum = defaultdict(int)
-for i in range(buyer_count):
-    seen = set()
-    for j in range(len(price_changes[i]) - 3):
-        seq = tuple(price_changes[i][j:(j + 4)])
-        if not seq in seen:
-            seq_sum[seq] += prices[i][j + 4]
-            seen.add(seq)
+        secret_sum += secret
 
-print(max(seq_sum.values()))
+    print(secret_sum)
+    print(max(seq_sum.values()))
