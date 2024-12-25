@@ -1,71 +1,41 @@
 import re
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+from enum import Enum
 
-lines = [line.strip() for line in open("input/24.txt")]
+Connection = namedtuple("Connection", "a op b output")
+
+
+class BitType(Enum):
+    IN = 0
+    FIRST_SUM = 1
+    SUM = 2
+    CARRY = 3
+    CARRY_AND = 4
+    CARRY_OR = 5
+    OUT = 6
 
 
 def interpret_as_binary(digits: list):
     return int("".join(reversed(digits)), 2)
 
 
-def execute_wires(wires: dict, connections: list, swaps: list = None, exp_digits: list = None):
-    if swaps is None:
-        swaps = []
-
-    # original_connection = connections.copy()
-
+def execute_wires(wires: dict, connections: list):
     executed = []
-    wrong = set()
-    while True:
-        for i, (wire_a, op, wire_b, output) in enumerate(connections):
-            if wire_a not in wires or wire_b not in wires:
+    while len(executed) < len(connections):
+        for i, c in enumerate(connections):
+            if i in executed or c.a not in wires or c.b not in wires:
                 continue
 
-            for swap in swaps:
-                if output in swap:
-                    idx = swap.index(output)
-                    output = swap[(idx + 1) % 2]
-
-            if op == "AND":
-                wires[output] = wires[wire_a] & wires[wire_b]
-            elif op == "OR":
-                wires[output] = wires[wire_a] | wires[wire_b]
-            elif op == "XOR":
-                wires[output] = wires[wire_a] ^ wires[wire_b]
-            else:
-                raise ValueError("Panic!")
-
-            if exp_digits is not None and output.startswith("z"):
-                digit = int(output[1:])
-                if exp_digits[digit] != wires[output]:
-                    wrong.add(output)
+            if c.op == "AND":
+                wires[c.output] = wires[c.a] & wires[c.b]
+            elif c.op == "OR":
+                wires[c.output] = wires[c.a] | wires[c.b]
+            elif c.op == "XOR":
+                wires[c.output] = wires[c.a] ^ wires[c.b]
 
             executed.append(i)
 
-        if len(executed) == 0:
-            break
-
-        for ex in reversed(executed):
-            del connections[ex]
-
-        executed.clear()
-
-    # while True:
-    #     pre = len(wrong)
-    #     new_wrong = set()
-    #     for w in wrong:
-    #         for (wire_a, op, wire_b, output) in original_connection:
-    #             if output == w:
-    #                 if not wire_a.startswith("x") and not wire_a.startswith("y"):
-    #                     new_wrong.add(wire_a)
-    #                 if not wire_b.startswith("x") and not wire_b.startswith("y"):
-    #                     new_wrong.add(wire_b)
-    #     wrong.update(new_wrong)
-    #     if len(wrong) == pre:
-    #         break
-    # print(wrong)
-
-    number = ['0'] * 100
+    number = ['0'] * 46
     for wire, val in wires.items():
         if wire.startswith("z"):
             number[int(wire[1:])] = str(val)
@@ -73,72 +43,90 @@ def execute_wires(wires: dict, connections: list, swaps: list = None, exp_digits
     return interpret_as_binary(number)
 
 
-wires = defaultdict(int)
-connections = []
-for line in lines:
-    if ": " in line:
-        wire, val = line.split(": ")
-        val = int(val)
-        wires[wire] = val
+def determine_bit_types(connections: list):
+    bit_type = defaultdict(set)
+    for c in connections:
+        # We classify the output bits by their function, depending on the inputs and the operator used
+        if (c.a[0] == "x" and c.b[0] == "y") or (c.a[0] == "y" and c.b[0] == "x"):
+            bit_type[BitType.IN].update([c.a, c.b])
+            if c.op == "AND":
+                if c.a[1:] == "00":
+                    bit_type[BitType.FIRST_SUM] = c.output
+                bit_type[BitType.SUM].add(c.output)
+            elif c.op == "XOR":
+                bit_type[BitType.CARRY].add(c.output)
+        else:
+            if c.op == "AND":
+                bit_type[BitType.CARRY_AND].add(c.output)
+            elif c.op == "OR":
+                bit_type[BitType.CARRY_OR].add(c.output)
+            elif c.op == "XOR":
+                bit_type[BitType.OUT].add(c.output)
+    return bit_type
 
-    elif "->" in line:
-        wire_a, op, wire_b, output = re.findall(r"([a-z0-9]+) (AND|OR|XOR) ([a-z0-9]+) -> ([a-z0-9]+)", line)[0]
-        connections.append((wire_a, op, wire_b, output))
 
-# # Replace Variable names to resemble the naming of a normal half-adder
-# replacement = set()
-# for wire_a, op, wire_b, output in connections:
-#     if (wire_a.startswith("x") and wire_b.startswith("y")) or (wire_a.startswith("y") and wire_b.startswith("x")):
-#         if op == "AND":
-#             replacement.add((output, "s" + wire_a[1:]))
-#         elif op == "XOR":
-#             replacement.add((output, "c" + wire_a[1:]))
-#
-# for r_old, r_new in replacement:
-#     for i, (wire_a, op, wire_b, output) in enumerate(connections):
-#         if wire_a == r_old:
-#             connections[i] = (r_new, op, wire_b, output)
-#         elif wire_b == r_old:
-#             connections[i] = (wire_a, op, r_new, output)
-#         elif output == r_old:
-#             connections[i] = (wire_a, op, wire_b, r_new)
-#
-# # Swap variables to always have same structure
-# for i, (wire_a, op, wire_b, output) in enumerate(connections):
-#     if wire_b.startswith("c"):
-#         connections[i] = (wire_b, op, wire_a, output)
-#     elif wire_b.startswith("x"):
-#         connections[i] = (wire_b, op, wire_a, output)
-#     elif wire_b.startswith("s"):
-#         connections[i] = (wire_b, op, wire_a, output)
-#
-# # Print out sorted connections
-# print(sorted(connections), sep="\n")
+def find_illegal_out_wires(bit_type: dict):
+    result = set()
 
-x, y = ["0"] * 100, ["0"] * 100
-for wire, val in wires.items():
-    if wire.startswith("x"):
-        x[int(wire[1:])] = str(val)
-    elif wire.startswith("y"):
-        y[int(wire[1:])] = str(val)
+    # z## bits may only be used as outputs, any other type would be illegal (except for first and last one...)
+    for type, bits in bit_type.items():
+        if type == BitType.OUT:
+            continue
+        for bit in bits:
+            if re.match(r"z[0-9]{2}", bit):
+                if (type == BitType.CARRY_OR and bit == "z45") or (type == BitType.CARRY and bit == "z00"):
+                    continue
+                result.add(bit)
 
-x_num = interpret_as_binary(x)
-y_num = interpret_as_binary(y)
-print(f"x = {x_num}, y = {y_num}")
+    # Likewise, no other bit should be an out type
+    for bit in bit_type[BitType.OUT]:
+        if not re.match(r"z[0-9]{2}", bit):
+            result.add(bit)
 
-z_expected = x_num + y_num
-print(f"Looking for {z_expected}")
-print()
+    return result
 
-# Necessary swaps determined manually by examining list printed above
-swaps = [('nqk', 'z07'), ('fpq', 'z24'), ('z32', 'srn'), ('fgt', 'pcp')]
 
-swapped_wires = []
-for x, y in swaps:
-    swapped_wires.extend([x, y])
-print(f"Swapped wires: {','.join(sorted(swapped_wires))}")
+def find_illegal_in_wires(connections: list, bit_type: dict):
+    result = set()
+    for c in connections:
+        allowed_types = []
+        # Only certain types of bits are allowed for certain operations
+        # This helps to detect when carry and sum bits are swapped
+        if c.op == "AND" or c.op == "XOR":
+            allowed_types = [BitType.IN, BitType.FIRST_SUM, BitType.CARRY, BitType.CARRY_OR]
+        elif c.op == "OR":
+            allowed_types = [BitType.SUM, BitType.CARRY_AND]
+        if not any(c.a in bit_type[allowed] for allowed in allowed_types):
+            result.add(c.a)
+        if not any(c.b in bit_type[allowed] for allowed in allowed_types):
+            result.add(c.b)
+    return result
 
-result = execute_wires(wires.copy(), connections.copy(), swaps)
-print(f"z = {result}")
-if result == z_expected:
-    print(f"FOUND with swaps: {swaps} ({','.join(sorted(swapped_wires))})")
+
+if __name__ == '__main__':
+    lines = [line.strip() for line in open("input/24.txt")]
+
+    wires = defaultdict(int)
+    connections = []
+    for line in lines:
+        if ": " in line:
+            wire, val = line.split(": ")
+            wires[wire] = int(val)
+
+        elif "->" in line:
+            connection = re.findall(r"([a-z0-9]+) (AND|OR|XOR) ([a-z0-9]+) -> ([a-z0-9]+)", line)[0]
+            connections.append(Connection(*connection))
+
+    # Part 1
+    print(execute_wires(wires, connections))
+
+    # Part 2
+    # To solve part 2 programmatically, we use a set of "simple" rules
+    # This makes assumptions about the structure of the adder, and also, certain swaps wouldn't be detectable this way
+    # But most likely, this should still be sufficient to cover all official inputs
+    bit_type = determine_bit_types(connections)
+    swapped_wires = set()
+    swapped_wires.update(find_illegal_out_wires(bit_type))
+    swapped_wires.update(find_illegal_in_wires(connections, bit_type))
+
+    print(','.join(sorted(swapped_wires)))
