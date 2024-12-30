@@ -15,10 +15,6 @@ class BitType(Enum):
     OUT = 6
 
 
-def interpret_as_binary(digits: list):
-    return int("".join(reversed(digits)), 2)
-
-
 def execute_wires(wires: dict, connections: list):
     executed = []
     while len(executed) < len(connections):
@@ -35,12 +31,8 @@ def execute_wires(wires: dict, connections: list):
 
             executed.append(i)
 
-    number = ['0'] * 46
-    for wire, val in wires.items():
-        if wire.startswith("z"):
-            number[int(wire[1:])] = str(val)
-
-    return interpret_as_binary(number)
+    number = sum(2 ** int(wire[1:]) for wire, val in wires.items() if val == 1 and wire.startswith("z"))
+    return number
 
 
 def determine_bit_types(connections: list):
